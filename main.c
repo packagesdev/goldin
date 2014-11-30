@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2006-2010, Stephane Sudre
+Copyright (c) 2006-2014, Stephane Sudre
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -8,7 +8,11 @@ Redistribution and use in source and binary forms, with or without modification,
 - Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 - Neither the name of the WhiteBox nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
 */
 
 /*
@@ -16,7 +20,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
               Project: goldin
 	  Original Author: S.Sudre
              Creation: 05/27/2006
-    Last modification: 04/22/09
+    Last modification: 11/30/14
     
     +----------+-------------+---------------------------------------------------------+
     |   Date   |    Author   | Comments                                                |
@@ -24,46 +28,49 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
     | 05/27/06 |   S.Sudre   | Version 0.0.1                                           |
     +----------+-------------+---------------------------------------------------------+
     | 05/30/06 |   S.Sudre   | Version 0.0.2                                           |
-	|          |             |                                                         |
-	|          |             | - We need to close Resource Forks on error and when     |
-	|          |             |   empty                                                 |
-	|          |             |                                                         |
-	|          |             | - Only retrieve the absolute path name when a split is  |
-	|          |             |   required => optimization                              |
-	|          |             |                                                         |
-	|          |             | - Addition of error strings                             |
-	|          |             |                                                         |
+    |          |             |                                                         |
+    |          |             | - We need to close Resource Forks on error and when     |
+    |          |             |   empty                                                 |
+    |          |             |                                                         |
+    |          |             | - Only retrieve the absolute path name when a split is  |
+    |          |             |   required => optimization                              |
+    |          |             |                                                         |
+    |          |             | - Addition of error strings                             |
+    |          |             |                                                         |
     +----------+-------------+---------------------------------------------------------+
     | 07/13/06 |   S.Sudre   | Version 0.0.3                                           |
-	|          |             |                                                         |
-	|          |             | - Fix swap issues with the FinderInfo and ExtFinderInfo |
-	+----------+-------------+---------------------------------------------------------+
+    |          |             |                                                         |
+    |          |             | - Fix swap issues with the FinderInfo and ExtFinderInfo |
+    +----------+-------------+---------------------------------------------------------+
     | 01/02/07 |   S.Sudre   | Version 0.0.4                                           |
-	|          |             |                                                         |
-	|          |             | - Properly deal with Symlinks from a FS point of view   |
-	+----------+-------------+---------------------------------------------------------+
+    |          |             |                                                         |
+    |          |             | - Properly deal with Symlinks from a FS point of view   |
+    +----------+-------------+---------------------------------------------------------+
     | 02/06/07 |   S.Sudre   | Version 0.0.5                                           |
-	|          |             |                                                         |
-	|          |             | - Properly deal with Symlinks on Intel                  |
-	+----------+-------------+---------------------------------------------------------+
+    |          |             |                                                         |
+    |          |             | - Properly deal with Symlinks on Intel                  |
+    +----------+-------------+---------------------------------------------------------+
     | 02/10/07 |   S.Sudre   | Version 0.0.6                                           |
-	|          |             |                                                         |
-	|          |             | - Apply permissions, owner and group to the .- file     |
-	+----------+-------------+---------------------------------------------------------+
-	| 04/22/09 |   S.Sudre   | Version 0.0.7                                           |
-	|          |             |                                                         |
-	|          |             | - Minor modifications to be 64-bit compatible           |
-	+----------+-------------+---------------------------------------------------------+
-	|          |             |                                                         |
+    |          |             |                                                         |
+    |          |             | - Apply permissions, owner and group to the .- file     |
+    +----------+-------------+---------------------------------------------------------+
+    | 04/22/09 |   S.Sudre   | Version 0.0.7                                           |
+    |          |             |                                                         |
+    |          |             | - Minor modifications to be 64-bit compatible           |
+    +----------+-------------+---------------------------------------------------------+
+    | 11/30/14 |   S.Sudre   | - Remove static state                                   |
+    |          |             | - Fix text indentation                                  |
+    +----------+-------------+---------------------------------------------------------+
+    |          |             |                                                         |
     +----------+-------------+---------------------------------------------------------+
 
-	Notes:
-	
-		o "A COMPLETER" means "To be completed"
+    Notes:
+
+    o "A COMPLETER" means "To be completed"
+ 
+    o To know why this tool is named goldin, see http://en.wikipedia.org/wiki/Sawing_a_woman_in_half
 		
-		o To know why this tool is named goldin, see http://en.wikipedia.org/wiki/Sawing_a_woman_in_half
-		
-		o This tool purpose is to be compatible with SplitForks and FixupResourceForks as best as possible. This explains why we have to create a Entry ID 2 even when it's not needed.
+    o This tool purpose is to be compatible with SplitForks and FixupResourceForks as best as possible. This explains why we have to create a Entry ID 2 even when it's not needed.
 */
 
 #include <CoreServices/CoreServices.h>
@@ -113,8 +120,8 @@ OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCata
 	UInt32 tResourceForkSize=0;
 	static HFSUniStr255 sResourceForkName={0,{}};
 	Boolean hasResourceFork=FALSE;
-	static UInt8 tPOSIXPath[PATH_MAX*2+1];
-	static UInt32 tPOSIXPathMaxLength=PATH_MAX*2;
+	UInt8 tPOSIXPath[PATH_MAX*2+1];
+	UInt32 tPOSIXPathMaxLength=PATH_MAX*2;
 	struct stat tFileStat;
 	FSIORefNum tNewFileRefNum;
 	
