@@ -818,7 +818,7 @@ void SplitForks(FSRef * inFileReference,FSRef * inParentReference,Boolean inFirs
 		
 		/* We need to split forks of the first level (and it allows us to check whether it's a folder or not) */
 		
-		tErr=FSGetCatalogInfo(inFileReference,kFSCatInfoGettableInfo,&tInfo,&tUnicodeFileName,NULL,NULL);
+		tErr=FSGetCatalogInfo(inFileReference,kFSCatInfoFinderInfo+kFSCatInfoFinderXInfo+kFSCatInfoPermissions+kFSCatInfoNodeFlags,&tInfo,&tUnicodeFileName,NULL,NULL);
 		
 		if (tErr==noErr)
 		{
@@ -875,103 +875,108 @@ void SplitForks(FSRef * inFileReference,FSRef * inParentReference,Boolean inFirs
 	if (tErr==noErr)
 	{
 		ItemCount tLookForItems,tFoundItems;
-		FSCatalogInfo * tFoundCatInfo;
-		FSRef * tFoundReferences;
-		HFSUniStr255 * tFoundFileNames;
 		
 		tLookForItems=1;
 			
-		tFoundCatInfo=(FSCatalogInfo *) malloc(tLookForItems*sizeof(FSCatalogInfo));
-			
-		tFoundReferences=(FSRef *) malloc(tLookForItems*sizeof(FSRef));
-		
-		tFoundFileNames=(HFSUniStr255 *) malloc(tLookForItems*sizeof(HFSUniStr255));
+		FSRef * tFoundReferences=(FSRef *) malloc(tLookForItems*sizeof(FSRef));
 		
 		do
 		{
-			tErr=FSGetCatalogInfoBulk(tIterator, tLookForItems, &tFoundItems,
-				NULL, kFSCatInfoGettableInfo, tFoundCatInfo,
-				tFoundReferences, NULL, tFoundFileNames);
+			tErr=FSGetCatalogInfoBulk(tIterator, tLookForItems, &tFoundItems,NULL, 0, NULL,tFoundReferences, NULL, NULL);
 			
 			if (tErr==noErr)
 			{
-				/* Check this is not a Hard Link */
-				
-				if ((tFoundCatInfo[0].nodeFlags & kFSNodeHardLinkMask)==0)
-				{
-					tErr=SplitFileIfNeeded(&tFoundReferences[0],inFileReference,&tFoundCatInfo[0],&tFoundFileNames[0]);
-						
-					if (tErr==noErr)
-					{
-						FSCatalogInfo tInfo;
-                        
-                        if (tFoundCatInfo[0].nodeFlags & kFSNodeIsDirectoryMask)
-						{				
-							/* 2. We need to proceed with the contents of the folder */
-						
-							SplitForks(&tFoundReferences[0],inFileReference,FALSE);
-						}
-                        
-                        /* 3. Check whether the filesystem item was split (i.e. the valence of the folder changed) */
-                        
-                        tErr=FSGetCatalogInfo(inFileReference,kFSCatInfoValence,&tInfo,NULL,NULL,NULL);
-                        
+                FSCatalogInfo tInfo;
+                HFSUniStr255 tUnicodeFileName;
+                
+                /* Retrieve the CatalogInfo with FSGetCatalogInfo because FSGetCatalogInfoBulk is buggy on Yosemite */
+                
+                tErr=FSGetCatalogInfo(&tFoundReferences[0],kFSCatInfoFinderInfo+kFSCatInfoFinderXInfo+kFSCatInfoPermissions+kFSCatInfoNodeFlags,&tInfo,&tUnicodeFileName,NULL,NULL);
+                
+                if (tErr==noErr)
+                {
+                    /* Check this is not a Hard Link */
+                    
+                    if ((tInfo.nodeFlags & kFSNodeHardLinkMask)==0)
+                    {
+                        tErr=SplitFileIfNeeded(&tFoundReferences[0],inFileReference,&tInfo,&tUnicodeFileName);
+                            
                         if (tErr==noErr)
                         {
-                            UInt32 tNewValence=tInfo.valence;
+                            if (tInfo.nodeFlags & kFSNodeIsDirectoryMask)
+                            {				
+                                /* 2. We need to proceed with the contents of the folder */
                             
-                            if (tNewValence>tValence)
+                                SplitForks(&tFoundReferences[0],inFileReference,FALSE);
+                            }
+                            
+                            /* 3. Check whether the filesystem item was split (i.e. the valence of the folder changed) */
+                            
+                            FSCatalogInfo tValenceInfo;
+                            
+                            tErr=FSGetCatalogInfo(inFileReference,kFSCatInfoValence,&tValenceInfo,NULL,NULL,NULL);
+                            
+                            if (tErr==noErr)
                             {
-                                /* The valence has changed so we need to:
-                                   - close the operator
-                                   - open a new one
-                                   - return to where we were
+                                UInt32 tNewValence=tValenceInfo.valence;
                                 
-                                   to avoid trying to split items that have already been split
-                                 */
-                                
-                                tValence=tNewValence;
-                                
-                                FSCloseIterator (tIterator);
-                                
-                                tErr=FSOpenIterator(inFileReference,kFSIterateFlat,&tIterator);
-                                
-                                if (tErr==noErr)
+                                if (tNewValence>tValence)
                                 {
-                                    FSRef tPreviousCacheRef=tFoundReferences[0];
+                                    /* The valence has changed so we need to:
+                                       - close the operator
+                                       - open a new one
+                                       - return to where we were
                                     
-                                    do
+                                       to avoid trying to split items that have already been split
+                                     */
+                                    
+                                    tValence=tNewValence;
+                                    
+                                    FSCloseIterator (tIterator);
+                                    
+                                    tErr=FSOpenIterator(inFileReference,kFSIterateFlat,&tIterator);
+                                    
+                                    if (tErr==noErr)
                                     {
-                                        tErr=FSGetCatalogInfoBulk(tIterator, 1, &tFoundItems,NULL, 0, NULL,tFoundReferences, NULL, NULL);
+                                        FSRef tPreviousCacheRef=tFoundReferences[0];
                                         
-                                        if (tErr==noErr)
+                                        do
                                         {
-                                            OSErr tCompareErr=FSCompareFSRefs(&tPreviousCacheRef,&tFoundReferences[0]);
+                                            tErr=FSGetCatalogInfoBulk(tIterator, 1, &tFoundItems,NULL, 0, NULL,tFoundReferences, NULL, NULL);
                                             
-                                            if (tCompareErr==noErr)
+                                            if (tErr==noErr)
                                             {
-                                                break;
+                                                OSErr tCompareErr=FSCompareFSRefs(&tPreviousCacheRef,&tFoundReferences[0]);
+                                                
+                                                if (tCompareErr==noErr)
+                                                {
+                                                    break;
+                                                }
                                             }
                                         }
+                                        while (tErr==noErr);
                                     }
-                                    while (tErr==noErr);
+                                    else
+                                    {
+                                        // A COMPLETER
+                                    }
                                 }
-                                else
-                                {
-                                    // A COMPLETER
-                                }
+                            }
+                            else
+                            {
+                                logerror("An error while getting Catalog Information for the File\n");
                             }
                         }
                         else
                         {
-                            logerror("An error while getting Catalog Information for the File\n");
+                            exit(-1);
                         }
-					}
-					else
-					{
-						exit(-1);
-					}
-				}
+                    }
+                }
+                else
+                {
+                    logerror("An error while getting Catalog Information for the File\n");
+                }
 			}
 			else
 			{
@@ -980,11 +985,7 @@ void SplitForks(FSRef * inFileReference,FSRef * inParentReference,Boolean inFirs
 		}
 		while (tErr==noErr);
 		
-		free(tFoundCatInfo);
-		
 		free(tFoundReferences);
-		
-		free(tFoundFileNames);
 		
 		FSCloseIterator (tIterator);
 	}
