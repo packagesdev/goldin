@@ -96,7 +96,7 @@ Boolean gVerboseMode=FALSE;
 
 #else
 
-#define logerror(...) (void)fprintf(stderr,__VA_ARGS__);
+#define logerror(...) (void)fprintf(stderr,__VA_ARGS__)
 
 #endif
 
@@ -112,20 +112,27 @@ Boolean gVerboseMode=FALSE;
 								(inPoint).v=CFSwapInt16((inPoint).v);			\
 							} while (0);
 
-OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCatalogInfo * inFileCatalogInfo,HFSUniStr255 * inFileName)
+
+void SplitForks(FSRef * inItemReferencePtr);
+void SplitForksChildren(FSRef * inFileReferencePtr,FSRef * inParentReferencePtr);
+
+OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCatalogInfo * inFileCatalogInfo,HFSUniStr255 * inFileName,Boolean * outDidSplit)
 {
 	OSErr tErr;
-	Boolean splitNeeded=FALSE;
+	Boolean tSplitNeeded=FALSE;
 	FSIORefNum tForkRefNum;
 	UInt32 tResourceForkSize=0;
 	static HFSUniStr255 sResourceForkName={0,{}};
-	Boolean hasResourceFork=FALSE;
+	Boolean tHasResourceFork=FALSE;
 	UInt8 tPOSIXPath[PATH_MAX*2+1];
 	UInt32 tPOSIXPathMaxLength=PATH_MAX*2;
 	struct stat tFileStat;
 	FSIORefNum tNewFileRefNum;
 	
-	if (sResourceForkName.length==0)
+	if (outDidSplit!=NULL)
+        *outDidSplit=FALSE;
+    
+    if (sResourceForkName.length==0)
 	{
 		tErr=FSGetResourceForkName(&sResourceForkName);
 	
@@ -173,9 +180,9 @@ OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCata
 		
 		if (tForkSize>0)
 		{
-			hasResourceFork=TRUE;
+			tHasResourceFork=TRUE;
 		
-			splitNeeded=TRUE;
+			tSplitNeeded=TRUE;
 		}
 		else
 		{
@@ -204,7 +211,7 @@ OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCata
 	
 	/* 2. Check for the presence of FinderInfo or ExtFinderInfo */
 	
-	if (splitNeeded==FALSE)
+	if (tSplitNeeded==FALSE)
 	{
 		UInt32 * tUnsignedInt32Ptr;
 		int i;
@@ -220,12 +227,12 @@ OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCata
 			{
 				/* We need to create a ._file */
 			
-				splitNeeded=TRUE;
+				tSplitNeeded=TRUE;
 				break;
 			}
 		}
 		
-		if (splitNeeded==TRUE)		/* 01/02/07: Symbolic link looks like this */
+		if (tSplitNeeded==TRUE)		/* 01/02/07: Symbolic link looks like this */
 		{
 			UInt32 tSymbolicLink;
 
@@ -236,7 +243,7 @@ OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCata
 
 			if (tUnsignedInt32Ptr[0]==tSymbolicLink)
 			{
-				splitNeeded=FALSE;
+				tSplitNeeded=FALSE;
 			}
 		}
 		else
@@ -249,7 +256,7 @@ OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCata
 				{
 					/* We need to create a ._file */
 				
-					splitNeeded=TRUE;
+					tSplitNeeded=TRUE;
 					break;
 				}
 			}
@@ -258,7 +265,7 @@ OSErr SplitFileIfNeeded(FSRef * inFileReference,FSRef * inParentReference,FSCata
 	
 	/* 3. Split if needed */
 	
-	if (splitNeeded==TRUE)
+	if (tSplitNeeded==TRUE)
 	{
 		FSRef tNewFileReference;
 		HFSUniStr255 tNewFileName;
@@ -513,7 +520,7 @@ tryagain:
 				
 			tEntryOffset=0x00000052;
 				
-			if (hasResourceFork==TRUE)
+			if (tHasResourceFork==TRUE)
 			{
 				/* **** Finder Info */
 			
@@ -644,7 +651,7 @@ tryagain:
 			
 			/* **** Write Resource Fork? */
 			
-			if (hasResourceFork==TRUE)
+			if (tHasResourceFork==TRUE)
 			{
 				/* We need to be clever and copy the Resource Fork by chunks to avoid using too much memory */
 				
@@ -715,8 +722,11 @@ tryagain:
 		
 			tErr=FSCloseFork(tNewFileRefNum);
 			
-			if (tErr!=noErr)
+			if (tErr==noErr)
 			{
+                if (outDidSplit!=NULL)
+                    *outDidSplit=TRUE;
+                
                 // A COMPLETER
             }
             
@@ -740,7 +750,7 @@ tryagain:
 		
 		/* Close the Resource Fork if needed */
 		
-		if (hasResourceFork==TRUE)
+		if (tHasResourceFork==TRUE)
 		{
 			tErr=FSCloseFork(tForkRefNum);
 		
@@ -797,7 +807,7 @@ writebail:
 	
 byebye:
 
-	if (hasResourceFork==TRUE)
+	if (tHasResourceFork==TRUE)
 	{
 		FSCloseFork(tForkRefNum);
 	}
@@ -805,84 +815,62 @@ byebye:
 	return tErr;
 }
 
-void SplitForks(FSRef * inFileReference,FSRef * inParentReference,Boolean inFirstLevel)
+void SplitForks(FSRef * inItemReferencePtr)
 {
-	OSErr tErr;
-	FSIterator tIterator;
-    UInt32 tValence=0;
+	FSCatalogInfo tInfo;
+    HFSUniStr255 tUnicodeFileName;
+    FSRef tParentReference;
     
-	if (inFirstLevel==TRUE)
-	{
-		FSCatalogInfo tInfo;
-		HFSUniStr255 tUnicodeFileName;
-		
-		/* We need to split forks of the first level (and it allows us to check whether it's a folder or not) */
-		
-		tErr=FSGetCatalogInfo(inFileReference,kFSCatInfoFinderInfo+kFSCatInfoFinderXInfo+kFSCatInfoPermissions+kFSCatInfoNodeFlags,&tInfo,&tUnicodeFileName,NULL,NULL);
-		
-		if (tErr==noErr)
-		{
-			/* Check this is not a Hard Link */
-				
-			if ((tInfo.nodeFlags & kFSNodeHardLinkMask)==0)
-			{
-				tErr=SplitFileIfNeeded(inFileReference,inParentReference,&tInfo,&tUnicodeFileName);
-				
-				if (tErr==noErr)
-				{
-					if (tInfo.nodeFlags & kFSNodeIsDirectoryMask)
-					{
-						/* It's a folder */
-					
-						/* We need to proceed with the contents of the folder */
-					
-						SplitForks(inFileReference,inParentReference,FALSE);
-					}
-				}
-				else
-				{
-					exit(-1);
-				}
-			}
-		}
-		else
-		{
-			logerror("An error while getting Catalog Information for the File\n");
-		}
-		
-		return;
-	}
-	else
+    /* We need to split forks of the first level (and it allows us to check whether it's a folder or not) */
+    
+    OSErr tErr=FSGetCatalogInfo(inItemReferencePtr,kFSCatInfoFinderInfo+kFSCatInfoFinderXInfo+kFSCatInfoPermissions+kFSCatInfoNodeFlags,&tInfo,&tUnicodeFileName,NULL,&tParentReference);
+    
+    if (tErr==noErr)
     {
-        /* It's necessarily a folder and HFS volume so we can get the valence */
+        /* Check this is not a Hard Link */
         
-        FSCatalogInfo tInfo;
-        
-        tErr=FSGetCatalogInfo(inFileReference,kFSCatInfoValence,&tInfo,NULL,NULL,NULL);
-        
-        if (tErr==noErr)
+        if ((tInfo.nodeFlags & kFSNodeHardLinkMask)==0)
         {
-            tValence=tInfo.valence;
-        }
-        else
-        {
-            logerror("An error while getting Catalog Information for the File\n");
+            tErr=SplitFileIfNeeded(inItemReferencePtr,&tParentReference,&tInfo,&tUnicodeFileName,NULL);
+            
+            if (tErr==noErr)
+            {
+                if (tInfo.nodeFlags & kFSNodeIsDirectoryMask)
+                {
+                    /* It's a folder */
+                    
+                    /* We need to proceed with the contents of the folder */
+                    
+                    SplitForksChildren(inItemReferencePtr,&tParentReference);
+                }
+            }
+            else
+            {
+                exit(-1);
+            }
         }
     }
+    else
+    {
+        logerror("An error while getting Catalog Information for the File\n");
+    }
+}
+
+void SplitForksChildren(FSRef * inFileReferencePtr,FSRef * inParentReferencePtr)
+{
+	FSIterator tIterator;
     
-	tErr=FSOpenIterator(inFileReference,kFSIterateFlat,&tIterator);
+	OSErr tErr=FSOpenIterator(inFileReferencePtr,kFSIterateFlat,&tIterator);
 	
 	if (tErr==noErr)
 	{
-		ItemCount tLookForItems,tFoundItems;
-		
-		tLookForItems=1;
-			
-		FSRef * tFoundReferences=(FSRef *) malloc(tLookForItems*sizeof(FSRef));
+		FSRef * tFoundReferences=(FSRef *) malloc(sizeof(FSRef));
 		
 		do
 		{
-			tErr=FSGetCatalogInfoBulk(tIterator, tLookForItems, &tFoundItems,NULL, 0, NULL,tFoundReferences, NULL, NULL);
+			ItemCount tFoundItems;
+            
+            tErr=FSGetCatalogInfoBulk(tIterator, 1, &tFoundItems,NULL, 0, NULL,tFoundReferences, NULL, NULL);
 			
 			if (tErr==noErr)
 			{
@@ -899,7 +887,9 @@ void SplitForks(FSRef * inFileReference,FSRef * inParentReference,Boolean inFirs
                     
                     if ((tInfo.nodeFlags & kFSNodeHardLinkMask)==0)
                     {
-                        tErr=SplitFileIfNeeded(&tFoundReferences[0],inFileReference,&tInfo,&tUnicodeFileName);
+                        Boolean tDidSplit=FALSE;
+                        
+                        tErr=SplitFileIfNeeded(&tFoundReferences[0],inFileReferencePtr,&tInfo,&tUnicodeFileName,&tDidSplit);
                             
                         if (tErr==noErr)
                         {
@@ -907,64 +897,37 @@ void SplitForks(FSRef * inFileReference,FSRef * inParentReference,Boolean inFirs
                             {				
                                 /* 2. We need to proceed with the contents of the folder */
                             
-                                SplitForks(&tFoundReferences[0],inFileReference,FALSE);
+                                SplitForksChildren(&tFoundReferences[0],inFileReferencePtr);
                             }
                             
                             /* 3. Check whether the filesystem item was split (i.e. the valence of the folder changed) */
                             
-                            FSCatalogInfo tValenceInfo;
-                            
-                            tErr=FSGetCatalogInfo(inFileReference,kFSCatInfoValence,&tValenceInfo,NULL,NULL,NULL);
-                            
-                            if (tErr==noErr)
+                            if (tDidSplit==TRUE)
                             {
-                                UInt32 tNewValence=tValenceInfo.valence;
+                                FSCloseIterator(tIterator);
                                 
-                                if (tNewValence>tValence)
+                                tErr=FSOpenIterator(inFileReferencePtr,kFSIterateFlat,&tIterator);
+                                
+                                if (tErr==noErr)
                                 {
-                                    /* The valence has changed so we need to:
-                                       - close the operator
-                                       - open a new one
-                                       - return to where we were
+                                    FSRef tPreviousCacheRef=tFoundReferences[0];
                                     
-                                       to avoid trying to split items that have already been split
-                                     */
-                                    
-                                    tValence=tNewValence;
-                                    
-                                    FSCloseIterator (tIterator);
-                                    
-                                    tErr=FSOpenIterator(inFileReference,kFSIterateFlat,&tIterator);
-                                    
-                                    if (tErr==noErr)
+                                    do
                                     {
-                                        FSRef tPreviousCacheRef=tFoundReferences[0];
+                                        tErr=FSGetCatalogInfoBulk(tIterator, 1, &tFoundItems,NULL, 0, NULL,tFoundReferences, NULL, NULL);
                                         
-                                        do
+                                        if (tErr==noErr)
                                         {
-                                            tErr=FSGetCatalogInfoBulk(tIterator, 1, &tFoundItems,NULL, 0, NULL,tFoundReferences, NULL, NULL);
+                                            OSErr tCompareErr=FSCompareFSRefs(&tPreviousCacheRef,&tFoundReferences[0]);
                                             
-                                            if (tErr==noErr)
+                                            if (tCompareErr==noErr)
                                             {
-                                                OSErr tCompareErr=FSCompareFSRefs(&tPreviousCacheRef,&tFoundReferences[0]);
-                                                
-                                                if (tCompareErr==noErr)
-                                                {
-                                                    break;
-                                                }
+                                                break;
                                             }
                                         }
-                                        while (tErr==noErr);
                                     }
-                                    else
-                                    {
-                                        // A COMPLETER
-                                    }
+                                    while (tErr==noErr);
                                 }
-                            }
-                            else
-                            {
-                                logerror("An error while getting Catalog Information for the File\n");
                             }
                         }
                         else
@@ -977,10 +940,6 @@ void SplitForks(FSRef * inFileReference,FSRef * inParentReference,Boolean inFirs
                 {
                     logerror("An error while getting Catalog Information for the File\n");
                 }
-			}
-			else
-			{
-				/* A COMPLETER */
 			}
 		}
 		while (tErr==noErr);
@@ -1050,13 +1009,9 @@ int main (int argc, const char * argv[])
     if (argc != 1)
     {
         if (argc==0)
-		{
 			logerror("No file or directory was specified\n");
-		}
 		else
-		{
 			logerror("Only one file or directory may be specified\n");
-		}
 		
 		return -1;
     }
@@ -1066,9 +1021,6 @@ int main (int argc, const char * argv[])
 		
 		if (realpath(argv[0],tResolvedPath)!=NULL)
 		{
-			FSRef tFileReference;
-			Boolean isDirectory;
-			OSStatus tErr;
 			struct statfs tStatFileSystem;
 			
 			if (statfs(tResolvedPath,&tStatFileSystem)!=0)
@@ -1100,62 +1052,40 @@ int main (int argc, const char * argv[])
 				return -1;
 			}
 			
-			if (!strcmp(tStatFileSystem.f_fstypename,"hfs"))
-			{
-				gMaxFileNameLength=pathconf(tResolvedPath,_PC_NAME_MAX);
-				
-				if (gMaxFileNameLength<0)
-				{
-					logerror("An error occurred while getting the File System Reference maximum length for a file name\n");
-					
-					return -1;
-				}
-				else
-				{
-					gMaxFileNameLength-=2;
-					
-					tErr=FSPathMakeRef((const UInt8 *) tResolvedPath,&tFileReference,&isDirectory);
-				
-					if (tErr==noErr)
-					{
-						FSRef tParentReference;
-						
-						/* Get the parent of the FSRef */
-						
-						tErr = FSGetCatalogInfo( &tFileReference, kFSCatInfoNone, NULL, NULL, NULL, &tParentReference );
-						
-						if (tErr==noErr)
-						{
-							if (gVerboseMode==TRUE)
-							{
-								printf("Splitting %s...\n",argv[0]);
-							}
-							
-							SplitForks(&tFileReference,&tParentReference,TRUE);
-						}
-						else
-						{
-							logerror("An error occurred while getting information about the parent directory of %s\n",argv[0]);
-							
-							return -1;
-						}
-					}
-					else
-					{
-						logerror("An error occurred while getting the File System Reference of %s\n",argv[0]);
-						
-						return -1;
-					}
-				}
-			}
-			else
+			if (strcmp(tStatFileSystem.f_fstypename,"hfs")!=0)
 			{
 				/* Return (-2) if this is not a HFS or Extended HFS File System */
-			
+				
 				logerror("\"%s\" is not on an hfs disk\n",argv[0]);
 				
 				return -2;
 			}
+			
+			gMaxFileNameLength=pathconf(tResolvedPath,_PC_NAME_MAX);
+			
+			if (gMaxFileNameLength<0)
+			{
+				logerror("An error occurred while getting the File System Reference maximum length for a file name\n");
+				
+				return -1;
+			}
+			
+			gMaxFileNameLength-=2;
+			
+			FSRef tFileReference;
+			OSStatus tErr=FSPathMakeRef((const UInt8 *) tResolvedPath,&tFileReference,NULL);
+		
+			if (tErr!=noErr)
+			{
+				logerror("An error occurred while getting the File System Reference of %s\n",argv[0]);
+				
+				return -1;
+			}
+			
+			if (gVerboseMode==TRUE)
+				printf("Splitting %s...\n",argv[0]);
+			
+			SplitForks(&tFileReference);
 		}
 		else
 		{
