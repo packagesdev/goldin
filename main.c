@@ -852,7 +852,7 @@ void SplitForks(FSRef * inItemReferencePtr)
     }
     else
     {
-        logerror("An error while getting Catalog Information for the File\n");
+        logerror("An error occurred while getting Catalog Information for the File\n");
     }
 }
 
@@ -938,7 +938,7 @@ void SplitForksChildren(FSRef * inFileReferencePtr,FSRef * inParentReferencePtr)
                 }
                 else
                 {
-                    logerror("An error while getting Catalog Information for the File\n");
+                    logerror("An error occurred while getting Catalog Information for the File\n");
                 }
 			}
 		}
