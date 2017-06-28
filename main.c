@@ -1058,7 +1058,7 @@ int main (int argc, const char * argv[])
 				
 				logerror("\"%s\" is not on an hfs disk\n",argv[0]);
 				
-				return -2;
+				return 254;
 			}
 			
 			gMaxFileNameLength=pathconf(tResolvedPath,_PC_NAME_MAX);
