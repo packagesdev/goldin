@@ -662,7 +662,7 @@ int main (int argc, const char * argv[])
 	
 	char * const tPathsArray[2]={tResolvedPath,NULL};
 	
-	FTS* tFileHierarchyPtr = fts_open(tPathsArray,FTS_PHYSICAL|FTS_NOSTAT,NULL);
+	FTS* tFileHierarchyPtr = fts_open(tPathsArray,FTS_PHYSICAL,NULL);
 	
 	
 	FTSENT* tFileHierarchyNode = NULL;
