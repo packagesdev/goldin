@@ -510,6 +510,10 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,bool inRemoveExtendAttributes)
 			{
 				switch(errno)
 				{
+					case ENOATTR:
+						
+						continue;
+					
 					case EACCES:
 						
 						logerror("The extended attribute \"%s\" could not be removed from \"%s\" because you do not have the appropriate permissions\n",tEntryPtr->extendedAttributeName,inFileHierarchyNode->fts_name);
