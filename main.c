@@ -506,19 +506,22 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,bool inRemoveExtendAttributes)
 		{
 			asf_entry_t * tEntryPtr=tEntriesPtrArray[tIndex];
 		
+			if (tEntryPtr->entryID==ASF_RESOURCEFORK && inFileHierarchyNode->fts_info==FTS_D)	// Folders do not have resource forks
+				continue;
+			
 			if (fremovexattr(tFileDescriptor,tEntryPtr->extendedAttributeName,0)==-1)
 			{
 				switch(errno)
 				{
-					case ENOATTR:
-						
-						continue;
-					
 					case EACCES:
 						
 						logerror("The extended attribute \"%s\" could not be removed from \"%s\" because you do not have the appropriate permissions\n",tEntryPtr->extendedAttributeName,inFileHierarchyNode->fts_name);
 						
 						break;
+						
+					case ENOATTR:
+						
+						continue;
 						
 					default:
 						
