@@ -1052,14 +1052,15 @@ int main (int argc, const char * argv[])
 				return -1;
 			}
 			
-			if (strcmp(tStatFileSystem.f_fstypename,"hfs")!=0)
+			if (strcmp(tStatFileSystem.f_fstypename,"hfs")!=0 && 
+				strcmp(tStatFileSystem.f_fstypename, "apfs")!=0)
 			{
-				/* Return (-2) if this is not a HFS or Extended HFS File System */
+				/* Return (-2) if this is not a HFS, Extended HFS or an APFS File System */
 				
-				logerror("\"%s\" is not on an hfs disk\n",argv[0]);
-				
-				return 254;
-			}
+				logerror("\"%s\" is neither on an hfs nor an apfs disk\n",argv[0]);
+                
+                return 254;
+            }
 			
 			gMaxFileNameLength=pathconf(tResolvedPath,_PC_NAME_MAX);
 			
