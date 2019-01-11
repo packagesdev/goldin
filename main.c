@@ -47,7 +47,14 @@ typedef struct asf_entry_t
 	
 } asf_entry_t;
 
-int goldin_splitfork(FTSENT * inFileHierarchyNode,bool inRemoveExtendAttributes);
+typedef enum
+{
+	SPLITOPTION_STRIP_AFTER_SPLIT=1<<0,
+	SPLITOPTION_PRESERVE_EXTENDED_ATTRIBUTES=1<<1
+} split_options_t;
+
+
+int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions);
 
 void log_write_error(int inError,const char * inFileName);
 
@@ -73,7 +80,7 @@ void log_write_error(int inError,const char * inFileName)
 	}
 }
 
-int goldin_splitfork(FTSENT * inFileHierarchyNode,bool inRemoveExtendAttributes)
+int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions)
 {
 	int tFileDescriptor=open(inFileHierarchyNode->fts_accpath,O_RDONLY,O_NOFOLLOW);
 	
@@ -500,7 +507,7 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,bool inRemoveExtendAttributes)
 		return -1;
 	}
 	
-	if (inRemoveExtendAttributes==true)
+	if ((inSplitOptions & SPLITOPTION_STRIP_AFTER_SPLIT)==SPLITOPTION_STRIP_AFTER_SPLIT)
 	{
 		for(uint16_t tIndex=0;tIndex<tEntriesCount;tIndex++)
 		{
@@ -548,6 +555,7 @@ static void usage(const char * inProcessName)
 {
 	printf("usage: %s [-s][-v][-u] <file or directory>\n",inProcessName);
 	printf("       -s  --  Strip resource fork from source after splitting\n");
+	printf("       -e  --  Preserve extended attributes\n");
 	printf("       -v  --  Verbose mode\n");
 	printf("       -u  --  Show usage\n");
 	
@@ -559,17 +567,23 @@ static void usage(const char * inProcessName)
 int main (int argc, const char * argv[])
 {
 	char ch;
-	bool tRemovedExtendedAttributes=false;
+	split_options_t tSplitOptions=0;
 	
 	
 	while ((ch = getopt(argc, (char ** const) argv, "svu")) != -1)
 	{
 		switch (ch)
 		{
+			case 'e':
+				/* Preserve extended attributes */
+				
+				tSplitOptions|=SPLITOPTION_PRESERVE_EXTENDED_ATTRIBUTES;
+				break;
+				
 			case 's':
 				/* Strip the resource fork */
 				
-				tRemovedExtendedAttributes=true;
+				tSplitOptions|=SPLITOPTION_STRIP_AFTER_SPLIT;
 				break;
 				
 			case 'v':
@@ -695,7 +709,7 @@ int main (int argc, const char * argv[])
 			case FTS_F :
 			case FTS_NSOK:
 				
-				if (goldin_splitfork(tFileHierarchyNode,tRemovedExtendedAttributes)!=0)
+				if (goldin_splitfork(tFileHierarchyNode,tSplitOptions)!=0)
 				{
 					fts_close(tFileHierarchyPtr);
 					
