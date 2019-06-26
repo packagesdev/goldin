@@ -532,9 +532,6 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 	{
 		asf_entry_t * tEntryPtr=tEntriesPtrArray[tIndex];
 		
-		if (tEntryPtr->entrySize==0)
-			continue;
-		
 		switch (tEntryPtr->entryID)
 		{
 			case ASF_FINDERINFO:
@@ -925,6 +922,9 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 				
 			case ASF_RESOURCEFORK:
 			{
+				if (tEntryPtr->entrySize==0)
+					continue;
+				
 #define GOLDIN_BUFFER_QUARTER_MEGABYTE_SIZE		262144
 				
 				size_t tAttributeBufferSize=GOLDIN_BUFFER_QUARTER_MEGABYTE_SIZE;
