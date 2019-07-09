@@ -443,7 +443,8 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 		
 		if (strncmp(XATTR_FINDERINFO_NAME, tEntryPtr->extendedAttributeName, sizeof(XATTR_FINDERINFO_NAME)+1)==0 && (inSplitOptions&SPLITOPTION_PRESERVE_EXTENDED_ATTRIBUTES)==SPLITOPTION_PRESERVE_EXTENDED_ATTRIBUTES)
 		{
-			tEntryDataOffset+=30;
+			if (tExtendedAttributesListHead!=NULL)
+				tEntryDataOffset+=30;
 			
 			tDataStart=tEntryDataOffset;
 			
