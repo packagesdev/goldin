@@ -849,73 +849,58 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 					
 					// Write Attributes Data
 					
-#define GOLDIN_BUFFER_FOUR_KILOBYTE_SIZE		4096
-					
-					size_t tAttributeBufferSize=GOLDIN_BUFFER_FOUR_KILOBYTE_SIZE;
-					
-					char * tAttributeBuffer=malloc(GOLDIN_BUFFER_FOUR_KILOBYTE_SIZE);
-					
-					while (tAttributeBuffer==NULL && tAttributeBufferSize>1024)		// If we can't even allocate 1KB of RAM, it's time to capitulate
-					{
-						tAttributeBufferSize=tAttributeBufferSize>>1;
-						
-						tAttributeBuffer=malloc(tAttributeBufferSize);
-					}
-					
-					if (tAttributeBuffer==NULL)
-					{
-						logerror("An error occurred because available memory is too low\n");
-						
-						fclose(fp);
-						
-						goto bail;
-					}
+					// We can not stream the reading of the extended attribute as the fgetxattr API only supports the position parameter for the resource fork attribute
 					
 					tNode=tExtendedAttributesListHead;
 					
 					while (tNode!=NULL)
 					{
-						u_int32_t tPosition=0;
-						
 						char * tAttributeName=tNode->entry.extendedAttributeName;
 						
-						do
+						size_t tAttributeBufferSize=(size_t)tNode->entry.entrySize;
+							
+						char * tAttributeBuffer=malloc(tAttributeBufferSize);
+						
+						if (tAttributeBuffer==NULL)
 						{
-							ssize_t tAttributeBufferReadSize=fgetxattr(tFileDescriptor,tAttributeName , tAttributeBuffer, tAttributeBufferSize, tPosition, 0);
+							logerror("An error occurred because the available memory is too low (%.2f MB buffer needed)\n",tAttributeBufferSize/(1024.0*1024));
 							
-							if (tAttributeBufferReadSize==-1)
-							{
-								logerror("An error occurred while reading the \"%s\" attribute (%d)\n",tAttributeName,errno);
-								
-								free(tAttributeBuffer);
-								
-								fclose(fp);
-								
-								goto bail;
-							}
+							fclose(fp);
 							
-							if (fwrite(tAttributeBuffer,tAttributeBufferReadSize,1, fp)!=1)
-							{
-								int tError=ferror(fp);
-								
-								if (tError!=0)
-									log_write_error(errno,inFileHierarchyNode->fts_path);
-								
-								free(tAttributeBuffer);
-								
-								fclose(fp);
-								
-								goto bail;
-							}
-							
-							tPosition+=tAttributeBufferReadSize;
+							goto bail;
 						}
-						while (tPosition<tNode->entry.entrySize);
+						
+						ssize_t tAttributeBufferReadSize=fgetxattr(tFileDescriptor,tAttributeName , tAttributeBuffer, tAttributeBufferSize, 0, 0);
+							
+						if (tAttributeBufferReadSize==-1)
+						{
+							logerror("An error occurred while reading the \"%s\" attribute (%d)\n",tAttributeName,errno);
+							
+							free(tAttributeBuffer);
+							
+							fclose(fp);
+							
+							goto bail;
+						}
+							
+						if (fwrite(tAttributeBuffer,tAttributeBufferReadSize,1, fp)!=1)
+						{
+							int tError=ferror(fp);
+							
+							if (tError!=0)
+								log_write_error(errno,inFileHierarchyNode->fts_path);
+							
+							free(tAttributeBuffer);
+							
+							fclose(fp);
+							
+							goto bail;
+						}
+							
+						free(tAttributeBuffer);
 						
 						tNode=tNode->next;
 					}
-					
-					free(tAttributeBuffer);
 				}
 				
 				break;
