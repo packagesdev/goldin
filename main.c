@@ -443,8 +443,11 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 		
 		if (strncmp(XATTR_FINDERINFO_NAME, tEntryPtr->extendedAttributeName, sizeof(XATTR_FINDERINFO_NAME)+1)==0 && (inSplitOptions&SPLITOPTION_PRESERVE_EXTENDED_ATTRIBUTES)==SPLITOPTION_PRESERVE_EXTENDED_ATTRIBUTES)
 		{
+			if (tEntryLength==0)	// Empty/No Finder Info, it will still be 32-byte long.
+				tEntryDataOffset+=ASF_DEFAULT_FINDERINFO_SIZE;
+			
 			if (tExtendedAttributesListHead!=NULL)
-				tEntryDataOffset+=30;
+				tEntryDataOffset+=(38);
 			
 			tDataStart=tEntryDataOffset;
 			
@@ -464,6 +467,16 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 				tNode=tNode->next;
 			}
 			
+			// Align on 4-bytes
+			
+			uint32_t tModulo=tDataLength%4;
+			
+			if (tDataLength!=0)
+			{
+				tDataLength+=(4-tModulo);
+				tEntryDataOffset+=(4-tModulo);
+			}
+			
 			tTotalSize=tEntryDataOffset;
 			
 			uint32_t tAttributesDataOffset=tDataStart;
@@ -480,6 +493,8 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 			}
 			
 			tEntryLength=tEntryDataOffset-tEntryOffset;
+			
+			
 		}
 		
 #ifdef __LITTLE_ENDIAN__
