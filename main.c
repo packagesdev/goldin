@@ -429,6 +429,8 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 	
 	uint32_t tEntryDataOffset=0x0000001A+tEntriesCount*12;
 	
+	uint32_t tFinderFinalPaddingLength=0;
+	
 	for(uint16_t tIndex=0;tIndex<tEntriesCount;tIndex++)
 	{
 		asf_entry_t * tEntryPtr=tEntriesPtrArray[tIndex];
@@ -473,8 +475,10 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 			
 			if (tDataLength!=0)
 			{
-				tDataLength+=(4-tModulo);
-				tEntryDataOffset+=(4-tModulo);
+				tFinderFinalPaddingLength=4-tModulo;
+				
+				tDataLength+=tFinderFinalPaddingLength;
+				tEntryDataOffset+=tFinderFinalPaddingLength;
 			}
 			
 			tTotalSize=tEntryDataOffset;
@@ -915,6 +919,22 @@ int goldin_splitfork(FTSENT * inFileHierarchyNode,split_options_t inSplitOptions
 						free(tAttributeBuffer);
 						
 						tNode=tNode->next;
+					}
+					
+					// Write Final padding
+					
+					uint8_t tZero8_t[4]={0,0,0,0};
+					
+					if (fwrite(&tZero8_t,sizeof(uint8_t),tFinderFinalPaddingLength, fp)!=tFinderFinalPaddingLength)
+					{
+						int tError=ferror(fp);
+						
+						if (tError!=0)
+							log_write_error(errno,inFileHierarchyNode->fts_path);
+						
+						fclose(fp);
+						
+						goto bail;
 					}
 				}
 				
